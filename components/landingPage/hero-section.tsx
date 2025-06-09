@@ -13,7 +13,6 @@ interface HeroSectionProps {
 export default function HeroSection({ currentLocale }: HeroSectionProps) {
     const t = useTranslations()
     const [currentSlide, setCurrentSlide] = useState(0)
-    const [isVisible, setIsVisible] = useState(true)
 
     const heroSlides: HeroSlide[] = useMemo(() => [
         {
