@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { useTranslations } from "next-intl"
 import type { HeroSlide, Locale } from "../../lib"
 
@@ -13,8 +13,9 @@ interface HeroSectionProps {
 export default function HeroSection({ currentLocale }: HeroSectionProps) {
     const t = useTranslations()
     const [currentSlide, setCurrentSlide] = useState(0)
+    const [isVisible, setIsVisible] = useState(true)
 
-    const heroSlides: HeroSlide[] = [
+    const heroSlides: HeroSlide[] = useMemo(() => [
         {
             image:
                 "https://images.pexels.com/photos/2132250/pexels-photo-2132250.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
@@ -36,69 +37,111 @@ export default function HeroSection({ currentLocale }: HeroSectionProps) {
             title: t("hero.slide3.title"),
             description: t("hero.slide3.description"),
         },
-    ]
+    ], [t])
+
+    const nextSlide = useCallback(() => {
+        setCurrentSlide((prev) => (prev + 1) % heroSlides.length)
+    }, [heroSlides.length])
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            nextSlide()
-        }, 5000)
+        const timer = setInterval(nextSlide, 5000)
         return () => clearInterval(timer)
-    }, [currentSlide])
+    }, [nextSlide])
 
-    const nextSlide = () => {
-        setCurrentSlide((prev) => (prev + 1) % heroSlides.length)
+    // Preload images for smoother transitions
+    useEffect(() => {
+        heroSlides.forEach((slide) => {
+            const img = new Image()
+            img.src = slide.image
+        })
+    }, [heroSlides])
+
+    // Optimized animation variants
+    const contentVariants = {
+        hidden: { 
+            opacity: 0, 
+            y: 20,
+            transition: { duration: 0.2 }
+        },
+        visible: { 
+            opacity: 1, 
+            y: 0,
+            transition: { 
+                duration: 0.3,
+                ease: "easeOut"
+            }
+        }
     }
+
+    const currentSlideData = heroSlides[currentSlide]
 
     return (
         <section className="relative h-[90vh] w-full overflow-hidden" dir={currentLocale === "ar" ? "rtl" : "ltr"}>
+            {/* Background overlay */}
             <div className="absolute inset-0 bg-black/30 z-10"></div>
-            <div
-                className="absolute inset-0 bg-cover bg-center z-0 transition-all duration-500"
-                style={{
-                    backgroundImage: `url('${heroSlides[currentSlide].image}')`,
-                }}
-            ></div>
+            
+            {/* Background images with CSS transitions for better performance */}
+            {heroSlides.map((slide, index) => (
+                <div
+                    key={index}
+                    className={`absolute inset-0 bg-cover bg-center transition-opacity duration-500 ${
+                        index === currentSlide ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    style={{
+                        backgroundImage: `url('${slide.image}')`,
+                        transform: 'translateZ(0)', // Force hardware acceleration
+                        willChange: 'opacity'
+                    }}
+                />
+            ))}
 
-            <motion.div
-                className="relative z-20 h-full flex flex-col items-center justify-center text-white px-4 text-center"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                key={currentSlide}
-            >
-                <h3 className="text-2xl font-light mb-2">{heroSlides[currentSlide].subtitle}</h3>
-                <h1 className="text-5xl md:text-6xl font-bold mb-6 max-w-4xl">{heroSlides[currentSlide].title}</h1>
-                <p className="text-xl max-w-2xl opacity-90">{heroSlides[currentSlide].description}</p>
+            {/* Content with reduced animation complexity */}
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={currentSlide}
+                    className="relative z-20 h-full flex flex-col items-center justify-center text-white px-4 text-center"
+                    variants={contentVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="hidden"
+                >
+                    <h3 className="text-2xl font-light mb-2">{currentSlideData.subtitle}</h3>
+                    <h1 className="text-5xl md:text-6xl font-bold mb-6 max-w-4xl">{currentSlideData.title}</h1>
+                    <p className="text-xl max-w-2xl opacity-90">{currentSlideData.description}</p>
 
-                <div className="mt-10 flex gap-4">
-                    <Link href={`/${currentLocale}/products`}>
-                        <button className="bg-[#337a5b] hover:bg-[#0f4229] text-white px-8 py-3 rounded-full transition-colors md:flex hidden ">
-                            {t("home.shopNow")}
-                        </button>
-                    </Link>
-                    <Link href={`/${currentLocale}/services`}>
-                        <button className="md:flex hidden bg-[#a9f59d] hover:bg-[#8ed67d] text-[#0f4229]  px-8 py-3 rounded-full transition-colors">
-                            {t("home.requestService")}
-                        </button>
-                    </Link>
-                    <Link href={`/${currentLocale}/about-us`}>
-                        <button className="md:flex hidden  border-2 border-white text-white px-8 py-3 rounded-full hover:bg-white hover:text-[#0f4229] transition-colors">
-                            {t("home.learnMore")}
-                        </button>
-                    </Link>
-                </div>
-            </motion.div>
+                    <div className="mt-10 flex gap-4">
+                        <Link href={`/${currentLocale}/products`}>
+                            <button className="bg-[#337a5b] hover:bg-[#0f4229] text-white px-8 py-3 rounded-full transition-colors md:flex hidden">
+                                {t("home.shopNow")}
+                            </button>
+                        </Link>
+                        <Link href={`/${currentLocale}/services`}>
+                            <button className="md:flex hidden bg-[#a9f59d] hover:bg-[#8ed67d] text-[#0f4229] px-8 py-3 rounded-full transition-colors">
+                                {t("home.requestService")}
+                            </button>
+                        </Link>
+                        <Link href={`/${currentLocale}/about-us`}>
+                            <button className="md:flex hidden border-2 border-white text-white px-8 py-3 rounded-full hover:bg-white hover:text-[#0f4229] transition-colors">
+                                {t("home.learnMore")}
+                            </button>
+                        </Link>
+                    </div>
+                </motion.div>
+            </AnimatePresence>
 
+            {/* Pagination dots */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex gap-2">
                 {heroSlides.map((_, index) => (
                     <button
                         key={index}
                         onClick={() => setCurrentSlide(index)}
-                        className={`w-3 h-3 rounded-full transition-colors ${currentSlide === index ? "bg-white" : "bg-white/50"}`}
-                    ></button>
+                        className={`w-3 h-3 rounded-full transition-colors duration-200 ${
+                            currentSlide === index ? "bg-white" : "bg-white/50"
+                        }`}
+                        style={{ transform: 'translateZ(0)' }} // Force hardware acceleration
+                    />
                 ))}
             </div>
         </section>
     )
 }
-

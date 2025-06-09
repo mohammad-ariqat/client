@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import ProductCarousel from './product-carousel';
@@ -14,31 +14,82 @@ interface TopSellersSectionProps {
 export default function TopSellersSection({ currentLocale }: TopSellersSectionProps) {
   const t = useTranslations();
   const topSellersRef = useRef(null);
-  const topSellersInView = useInView(topSellersRef, { once: true, margin: '-100px' });
+  const topSellersInView = useInView(topSellersRef, { 
+    once: true, 
+    margin: '-50px', // Reduced margin for earlier trigger
+    amount: 0.1 // Trigger when 10% is visible
+  });
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const topSellersVariants = {
-    initial: { opacity: 0, y: 30, scale: 0.95 },
+  // Memoized animation variants with reduced complexity
+  const topSellersVariants = useMemo(() => ({
+    initial: { 
+      opacity: 0, 
+      y: 20, // Reduced from 30px
+      transition: { duration: 0.2 }
+    },
     animate: {
       opacity: 1,
       y: 0,
-      scale: 1,
-      transition: { duration: 0.2, ease: 'easeOut', type: 'spring', stiffness: 100 },
+      transition: { 
+        duration: 0.3, // Reduced duration
+        ease: 'easeOut',
+        staggerChildren: 0.1
+      },
     },
-  };
+  }), []);
 
+  // Memoized title animation variants
+  const titleVariants = useMemo(() => ({
+    initial: { 
+      opacity: 0, 
+      y: 15,
+      transition: { duration: 0.2 }
+    },
+    animate: { 
+      opacity: 1, 
+      y: 0,
+      transition: { 
+        duration: 0.3, 
+        ease: 'easeOut' 
+      }
+    }
+  }), []);
+
+  // Memoized carousel animation variants
+  const carouselVariants = useMemo(() => ({
+    initial: { 
+      opacity: 0,
+      transition: { duration: 0.2 }
+    },
+    animate: { 
+      opacity: 1,
+      transition: { 
+        duration: 0.3, 
+        delay: 0.1 
+      }
+    }
+  }), []);
+
+  // Memoized load products function
+  const loadProducts = useCallback(async () => {
+    if (products.length > 0) return; // Prevent refetching if already loaded
+    
+    try {
+      setIsLoading(true);
+      const topProducts = await fetchTopProducts();
+      setProducts(topProducts);
+    } catch (err) {
+      console.error('Error fetching top products:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [products.length]);
 
   useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const topProducts = await fetchTopProducts();
-        setProducts(topProducts);
-      } catch (err) {
-        console.error('Error fetching top products:', err);
-      }
-    };
     loadProducts();
-  }, [t]);
+  }, []); // Removed t dependency to prevent unnecessary refetches
 
   return (
     <motion.section
@@ -48,19 +99,54 @@ export default function TopSellersSection({ currentLocale }: TopSellersSectionPr
       animate={topSellersInView ? 'animate' : 'initial'}
       variants={topSellersVariants}
       dir={currentLocale === 'ar' ? 'rtl' : 'ltr'}
+      style={{
+        transform: 'translateZ(0)', // Force hardware acceleration
+        willChange: topSellersInView ? 'auto' : 'transform, opacity'
+      }}
     >
-    <div className="absolute inset-0 opacity-10 pointer-events-none bg-no-repeat bg-cover"
-        style={{ backgroundImage: "url('/bg2.svg')" }}>
-    </div>
+      {/* Optimized background with hardware acceleration */}
+      <div 
+        className="absolute inset-0 opacity-10 pointer-events-none bg-no-repeat bg-cover"
+        style={{ 
+          backgroundImage: "url('/bg2.svg')",
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden' // Prevent flickering
+        }}
+      />
 
-
-      <h2 className="text-center text-3xl sm:text-4xl lg:text-5xl font-bold text-[var(--accent-color)] mb-0 relative">
+      <motion.h2 
+        className="text-center text-3xl sm:text-4xl lg:text-5xl font-bold text-[var(--accent-color)] mb-0 relative"
+        variants={titleVariants}
+      >
         {t('home.topSellers')}
-        <span className="absolute inset-0 -z-10 bg-[var(--accent-color)] opacity-10 rounded-full filter blur-xl" />
-      </h2>
+        <span 
+          className="absolute inset-0 -z-10 bg-[var(--accent-color)] opacity-10 rounded-full filter blur-xl"
+          style={{
+            transform: 'translateZ(0)', // Hardware acceleration for blur effect
+            backfaceVisibility: 'hidden'
+          }}
+        />
+      </motion.h2>
 
-      <ProductCarousel products={products} currentLocale={currentLocale} pageName="home" />
-
+      <motion.div
+        variants={carouselVariants}
+        style={{
+          transform: 'translateZ(0)', // Hardware acceleration for carousel container
+        }}
+      >
+        {/* Show loading state or carousel */}
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent-color)]"></div>
+          </div>
+        ) : (
+          <ProductCarousel 
+            products={products} 
+            currentLocale={currentLocale} 
+            pageName="home" 
+          />
+        )}
+      </motion.div>
     </motion.section>
   );
 }
